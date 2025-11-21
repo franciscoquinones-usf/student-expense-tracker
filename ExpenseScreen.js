@@ -20,6 +20,9 @@ export default function ExpenseScreen() {
   const [note, setNote] = useState('');
   const [filter, setFilter] = useState("all");
 
+  const [totalSpending, setTotalSpending] = useState(0);
+  const [categoryTotals, setCategoryTotals] = useState({});
+
 const loadExpenses = async () => {
   const rows = await db.getAllAsync(
     'SELECT * FROM expenses ORDER BY id DESC;'
@@ -28,7 +31,11 @@ const loadExpenses = async () => {
   if (filter === "all") {
     setExpenses(rows);
     return;
+  
+    updateTotals(rows);
+    return;
   }
+
   const now = new Date();
   let startDate = null;
 
@@ -54,8 +61,20 @@ const loadExpenses = async () => {
   });
 
   setExpenses(filtered);
+
+  updateTotals(filtered);
 };
 
+const updateTotals = (list) => {
+  const total = list.reduce((acc, e) => acc+ Number(e.amount), 0);
+  setTotalSpending(total);
+  const catTotals = {};
+  for (const e of list) {
+    if (!catTotals[e.category]) catTotals [e.category] = 0;
+    catTotals[e.category] += Number(e.amount);
+  }
+  setCategoryTotals(catTotals);
+};
 
   const addExpense = async () => {
     const amountNumber = parseFloat(amount);
@@ -71,8 +90,6 @@ const loadExpenses = async () => {
     'INSERT INTO expenses (amount, category, note, date) VALUES (?, ?, ?, ?);',
     [amountNumber, trimmedCategory, trimmedNote || null, today]
   );
-
-
 
     setAmount('');
     setCategory('');
@@ -139,6 +156,25 @@ const loadExpenses = async () => {
         <TouchableOpacity onPress={() => setFilter("month")}>
           <Text style={filter === "month" ? styles.activeFilter : styles.filter}>This Month</Text>
         </TouchableOpacity>
+      </View>
+
+      <View style={{marginBottom: 16}}>
+        <Text style={{color: "#fbbf24", fontSize: 18, fontWeight: "700"}}>
+          Total Spending ({filter === "all" ? "All" :
+                            filter === "week" ? "This Week" :
+                            "This Month"}) : ${totalSpending.toFixed(2)}
+        </Text>
+        <Text style={{color: "#9ca3af", marginTop: 8, fontWeight: "600"}}>By Category:</Text>
+
+        {Object.keys(categoryTotals).length === 0 ? (
+          <Text style={{ color: "#6b7280" }}>No expenses.</Text>
+        ) : (
+          Object.entries(categoryTotals).map(([cat, total]) => (
+            <Text key={cat} style={{ color: "#e5e7eb" }}>
+              • {cat}: ${total.toFixed(2)}
+            </Text>
+          ))
+        )}
       </View>
 
       <View style={styles.form}>
