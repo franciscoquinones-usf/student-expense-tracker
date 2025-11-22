@@ -23,6 +23,8 @@ export default function ExpenseScreen() {
   const [totalSpending, setTotalSpending] = useState(0);
   const [categoryTotals, setCategoryTotals] = useState({});
 
+  const [editingID, setEditingID] = useState(null);
+
 const loadExpenses = async () => {
   const rows = await db.getAllAsync(
     'SELECT * FROM expenses ORDER BY id DESC;'
@@ -30,8 +32,6 @@ const loadExpenses = async () => {
 
   if (filter === "all") {
     setExpenses(rows);
-    return;
-  
     updateTotals(rows);
     return;
   }
@@ -68,6 +68,7 @@ const loadExpenses = async () => {
 const updateTotals = (list) => {
   const total = list.reduce((acc, e) => acc+ Number(e.amount), 0);
   setTotalSpending(total);
+
   const catTotals = {};
   for (const e of list) {
     if (!catTotals[e.category]) catTotals [e.category] = 0;
@@ -98,24 +99,69 @@ const updateTotals = (list) => {
     loadExpenses();
   };
 
+  const updateExpense = async () => {
+  if (!editingID) return;
+
+  const amountNumber = parseFloat(amount);
+  if (isNaN(amountNumber) || amountNumber <= 0) return;
+
+  await db.runAsync(
+    `UPDATE expenses
+     SET amount = ?, category = ?, note = ?
+     WHERE id = ?;`,
+    [amountNumber, category.trim(), note.trim(), editingID] 
+  );
+
+  setEditingID(null);
+  setAmount('');
+  setCategory('');
+  setNote('');
+
+  loadExpenses();
+};
+
   const deleteExpense = async (id) => {
     await db.runAsync('DELETE FROM expenses WHERE id = ?;', [id]);
     loadExpenses();
   };
 
-  const renderExpense = ({ item }) => (
-    <View style={styles.expenseRow}>
-      <View style={{ flex: 1 }}>
-        <Text style={styles.expenseAmount}>${Number(item.amount).toFixed(2)}</Text>
-        <Text style={styles.expenseCategory}>{item.category}</Text>
-        {item.note ? <Text style={styles.expenseNote}>{item.note}</Text> : null}
-        <Text style={styles.expenseDate}>{new Date(item.date).toLocaleDateString()}</Text>
-      </View>
+  const startEditing = (exp) => {
+    setEditingID(exp.id);
+    setAmount(String(exp.amount));
+    setCategory(exp.category);
+    setNote(exp.note || "");
+  };
 
-      <TouchableOpacity onPress={() => deleteExpense(item.id)}>
-        <Text style={styles.delete}>✕</Text>
+  const renderExpense = ({ item }) => (
+<View style={styles.expenseRow}>
+  <View style={{ flex: 1 }}>
+
+    <View style={styles.amountRow}>
+      <Text style={styles.expenseAmount}>
+        ${Number(item.amount).toFixed(2)}
+      </Text>
+
+      <TouchableOpacity onPress={() => startEditing(item)}>
+        <Text style={styles.editText}>Edit</Text>
       </TouchableOpacity>
     </View>
+
+    <Text style={styles.expenseCategory}>{item.category}</Text>
+
+    {item.note ? (
+      <Text style={styles.expenseNote}>{item.note}</Text>
+    ) : null}
+
+    <Text style={styles.expenseDate}>
+      {new Date(item.date).toLocaleDateString()}
+    </Text>
+
+  </View>
+
+  <TouchableOpacity onPress={() => deleteExpense(item.id)}>
+    <Text style={styles.delete}>x</Text>
+  </TouchableOpacity>
+</View>
   );
 
   useEffect(() => {
@@ -200,7 +246,8 @@ const updateTotals = (list) => {
           value={note}
           onChangeText={setNote}
         />
-        <Button title="Add Expense" onPress={addExpense} />
+        <Button title={editingID ? "Save Changes" : "Add Expenses"}
+        onPress={editingID ? updateExpense : addExpense}/>
       </View>
 
       <FlatList
@@ -293,4 +340,23 @@ const styles = StyleSheet.create({
     marginTop: 12,
     fontSize: 12,
   },
+
+  editText: {
+  color: 'white',
+  fontSize: 12,
+  marginLeft: 6,
+},
+
+actionRow: {
+  flexDirection: "row",
+  alignItems: "center",
+  marginLeft: 8,
+},
+
+amountRow: {
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 8,
+},
+
 });
