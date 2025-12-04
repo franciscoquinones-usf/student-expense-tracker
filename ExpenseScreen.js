@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import {
   SafeAreaView,
   View,
@@ -255,12 +255,74 @@ const updateTotals = (list) => {
         keyExtractor={(item) => item.id.toString()}
         renderItem={renderExpense}
         ListEmptyComponent={<Text style={styles.empty}>No expenses yet.</Text>}
-      />
+        ListFooterComponent={() => (
+          <View>
+            <View style={styles.chartContainer}>
+              <Text style={styles.chartTitle}>Spending by Category</Text>
+              <View style={styles.chartInnerWrap}>
+                <BarChart totals={categoryTotals} total={totalSpending} />
+              </View>
+            </View>
 
-      <Text style={styles.footer}>
-        Enter your expenses and they’ll be saved locally with SQLite.
-      </Text>
+            <Text style={styles.footer}>
+              Enter your expenses and they’ll be saved locally with SQLite.
+            </Text>
+          </View>
+        )}
+      />
     </SafeAreaView>
+  );
+}
+
+// Lightweight, dependency-free horizontal bar chart component
+function BarChart({ totals, total }) {
+  const entries = useMemo(() => Object.entries(totals).sort((a, b) => b[1] - a[1]), [totals]);
+
+  if (entries.length === 0) {
+    return <Text style={styles.noChart}>No data to chart.</Text>;
+  }
+
+  // scale relative to the largest category so bars fit well even with outliers
+  const max = entries[0][1] || 1;
+
+  // deterministic color generator for categories (simple HSL-based)
+  const colorFor = (seed) => {
+    let hash = 0;
+    for (let i = 0; i < seed.length; i++) hash = seed.charCodeAt(i) + ((hash << 5) - hash);
+    const h = Math.abs(hash) % 360;
+    return `hsl(${h} 70% 55%)`;
+  };
+
+  return (
+    <View style={styles.barsWrap}>
+      <View style={styles.legendRow}>
+        {entries.map(([cat]) => (
+          <View key={cat} style={styles.legendItem}>
+            <View style={[styles.legendColor, { backgroundColor: colorFor(cat) }]} />
+            <Text style={styles.legendLabel}>{cat}</Text>
+          </View>
+        ))}
+      </View>
+
+      {entries.map(([cat, amt]) => {
+        const ratio = max > 0 ? amt / max : 0; // 0..1 based on max bucket
+        const pct = Math.max(0.02, ratio); // minimum visible fraction
+        return (
+          <View key={cat} style={styles.barRow}>
+            <Text style={styles.barLabel}>{cat}</Text>
+            <View style={styles.barOuter}>
+              <View
+                style={[
+                  styles.barInner,
+                  { width: `${(pct * 100).toFixed(2)}%`, backgroundColor: colorFor(cat) },
+                ]}
+              />
+            </View>
+            <Text style={styles.barValue}>${amt.toFixed(2)}</Text>
+          </View>
+        );
+      })}
+    </View>
   );
 }
 
@@ -358,5 +420,77 @@ amountRow: {
   alignItems: "center",
   gap: 8,
 },
+
+  chartContainer: {
+    marginTop: 12,
+    backgroundColor: '#0b1220',
+    padding: 10,
+    borderRadius: 8,
+  },
+  chartTitle: {
+    color: '#e5e7eb',
+    fontWeight: '700',
+    marginBottom: 8,
+  },
+  chartInnerWrap: {
+    maxHeight: 220,
+    paddingBottom: 8,
+  },
+  barsWrap: {
+    gap: 8,
+  },
+  legendRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 8,
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 12,
+    marginBottom: 4,
+  },
+  legendColor: {
+    width: 12,
+    height: 12,
+    borderRadius: 3,
+    marginRight: 6,
+  },
+  legendLabel: {
+    color: '#d1d5db',
+    fontSize: 12,
+  },
+  barRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  barLabel: {
+    width: 80,
+    color: '#e5e7eb',
+    fontSize: 12,
+  },
+  barOuter: {
+    flex: 1,
+    backgroundColor: '#0f1724',
+    height: 18,
+    borderRadius: 8,
+    overflow: 'hidden',
+    marginRight: 8,
+  },
+  barInner: {
+    height: '100%',
+    borderRadius: 8,
+  },
+  barValue: {
+    width: 70,
+    textAlign: 'right',
+    color: '#cbd5e1',
+    fontSize: 12,
+  },
+  noChart: {
+    color: '#9ca3af',
+  },
 
 });
